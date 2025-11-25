@@ -1,0 +1,13 @@
+# Ignorar dataset completo
+dataset/
+dataset.zip
+
+# Ignorar modelos
+*.pt
+
+# Ignorar cache
+__pycache__/
+
+# Ignorar runs de entrenamiento
+runs/
+

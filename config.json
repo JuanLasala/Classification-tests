@@ -1,0 +1,29 @@
+{
+  "source_dir": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Images",
+  "output_dir": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Classification tests/dataset",
+
+  "splits": {
+    "train": 0.8,
+    "val": 0.1,
+    "test": 0.1
+  },
+
+  "classes": ["Fire", "No Fire"],
+  "seed": 42,
+
+  "training": {
+    "epochs": 30,
+    "batch_size": 32,
+    "img_size": 224,
+    "model": "yolov8n-cls.pt",
+    "patience": 5
+  },
+
+
+
+  
+    "model_path": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Classification tests/runs/cls_model3/weights/best.pt"
+,
+    "prediction_input_dir": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Wildfire Data Exploration/wildfires_data_exploration/data/fire/viirs-snpp_Rwanda_sentinel-2_20251121_144138",
+    "prediction_output_dir": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Prueba Clasificacion/Prediction results"
+}
