@@ -18,12 +18,31 @@
     "model": "yolov8n-cls.pt",
     "patience": 5
   },
-
-
-
-  
+    
     "model_path": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Classification tests/runs/cls_model3/weights/best.pt"
 ,
     "prediction_input_dir": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Wildfire Data Exploration/wildfires_data_exploration/data/fire/viirs-snpp_Rwanda_sentinel-2_20251121_144138",
     "prediction_output_dir": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Prueba Clasificacion/Prediction results"
+,
+   
+    "dataset": {
+        "train_dir": "./dataset/train",
+        "val_dir": "./dataset/val",
+        "test_dir": "./dataset/test",
+        "img_size": 224,
+        "batch_size": 32
+    },
+    "efficientnet": {
+        "model_name": "efficientnet_b0",
+        "epochs": 20,
+        "learning_rate": 0.0001,
+        "optimizer": "adam",
+        "num_classes": 2
+    },
+    "output": {
+        "checkpoint_dir": "./checkpoints/efficientnet",
+        "plots_dir": "./plots/efficientnet"
+    }
 }
+
+
