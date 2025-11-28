@@ -3,3 +3,10 @@ matplotlib
 scikit-learn
 pandas
 numpy
+torch
+torchvision
+timm
+scikit-learn
+matplotlib
+numpy
+#pip install -r requirements.txt

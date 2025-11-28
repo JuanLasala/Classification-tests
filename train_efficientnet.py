@@ -1,129 +1,152 @@
-import os
+import json
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from torchvision import transforms
 from timm import create_model
-from utils import load_config, set_seed, ensure_dir, load_image_paths
-from datasets import ImageClassificationDataset
-from plots import plot_training_curves
+from torchvision import transforms, datasets
+from torch.utils.data import DataLoader
+from plots import plot_loss_curve, plot_confusion, save_classification_report
+import os
+from datetime import datetime
 
-def build_transforms(img_size):
-    return transforms.Compose([
+
+def load_config(path="config.json"):
+    with open(path, "r") as f:
+        return json.load(f)
+
+def train(config_path="config.json"):
+    # ---- TIMESTAMP ----
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    print("RUN ID:", timestamp)
+
+    cfg = load_config(config_path)
+
+    # ---- DIRECTORIOS ÚNICOS POR RUN ----
+    checkpoint_dir = os.path.join(cfg["output"]["checkpoint_dir"], timestamp)
+    plots_dir = os.path.join(cfg["output"]["plots_dir"], timestamp)
+
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
+
+    # ---- CONFIG ----
+    img_size = cfg["dataset"]["img_size"]
+    batch_size = cfg["dataset"]["batch_size"]
+    lr = cfg["efficientnet"]["learning_rate"]
+    epochs = cfg["efficientnet"]["epochs"]
+    num_classes = cfg["efficientnet"]["num_classes"]
+    model_name = cfg["efficientnet"]["model_name"]
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    class_names = cfg.get("classes", ["Fire", "No Fire"])
+
+    # ---- TRANSFORMS ----
+    tf = transforms.Compose([
         transforms.Resize((img_size, img_size)),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406],[0.229, 0.224, 0.225])
     ])
 
-def build_dataloaders(config):
-    train_paths, val_paths = load_image_paths(config["dataset"]["train_dir"], config["dataset"]["val_dir"])
-
-    train_tf = build_transforms(config["training"]["image_size"])
-    val_tf   = build_transforms(config["training"]["image_size"])
-
-    train_dataset = ImageClassificationDataset(train_paths, transform=train_tf)
-    val_dataset   = ImageClassificationDataset(val_paths,   transform=val_tf)
-
-    train_loader = DataLoader(train_dataset, batch_size=config["training"]["batch_size"], shuffle=True, num_workers=4)
-
-    val_loader = DataLoader(val_dataset, batch_size=config["training"]["batch_size"], shuffle=False, num_workers=4)
-
-    return train_loader, val_loader
-
-def build_model(config):
-    model = create_model(
-        "efficientnet_b0",
-        pretrained=config["model"]["pretrained"],
-        num_classes=config["model"]["num_classes"]
-    )
-    return model
-
-def train_one_epoch(model, loader, criterion, optimizer, device):
-    model.train()
-    total_loss, correct, total = 0, 0, 0
-
-    for images, labels in loader:
-        images, labels = images.to(device), labels.to(device)
-
-        optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-
-        total_loss += loss.item()
-        _, pred = outputs.max(1)
-        correct += pred.eq(labels).sum().item()
-        total += labels.size(0)
-
-    return total_loss / len(loader), correct / total
-
-def validate(model, loader, criterion, device):
-    model.eval()
-    total_loss, correct, total = 0, 0, 0
-
-    with torch.no_grad():
-        for images, labels in loader:
-            images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-
-            total_loss += loss.item()
-            _, pred = outputs.max(1)
-            correct += pred.eq(labels).sum().item()
-            total += labels.size(0)
-
-    return total_loss / len(loader), correct / total
-
-def train(config_path="config.json"):
-    # ---- CONFIG ----
-    config = load_config(config_path)
-    set_seed(config["training"]["seed"])
-    ensure_dir(config["output"]["model_dir"])
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
     # ---- DATA ----
-    train_loader, val_loader = build_dataloaders(config)
+    train_dataset = datasets.ImageFolder(cfg["dataset"]["train_dir"], transform=tf)
+    val_dataset   = datasets.ImageFolder(cfg["dataset"]["val_dir"],   transform=tf)
+    test_dataset = datasets.ImageFolder(cfg["dataset"]["test_dir"], transform=tf)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=False, persistent_workers=True)
+    val_loader   = DataLoader(val_dataset,   batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=False, persistent_workers=True)
+    test_loader  = DataLoader(test_dataset,  batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=False, persistent_workers=True)
 
     # ---- MODEL ----
-    model = build_model(config).to(device)
+    print("Cargando modelo EfficientNet preentrenado...")
+    model = create_model(model_name, pretrained=True)
+
+    # 🔥 CONGELAR TODA LA EFFICIENTNET
+    for param in model.parameters():
+        param.requires_grad = False
+
+    # 🔥 2) DESCONGELAR SOLO LOS ÚLTIMOS BLOQUES (fine-tuning parcial)
+    for name, param in model.named_parameters():
+        if "blocks.5" in name or "blocks.6" in name:  # Ajusta según la arquitectura B0
+            param.requires_grad = True
+
+
+    # 🔥 REEMPLAZAR SOLO LA ÚLTIMA CAPA POR UNA ENTRENABLE
+    in_features = model.classifier.in_features
+    model.classifier = nn.Linear(in_features, num_classes)
+
+    model = model.to(device)
+
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=config["training"]["learning_rate"]
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    best_val_acc = 0
-    history = {"train_loss": [], "val_loss": [],
-               "train_acc": [], "val_acc": []}
+    # ---- LOGS ----
+    train_losses = []
+    val_losses = []
+    val_targets = []
+    val_preds = []
 
-    # ---- TRAIN LOOP ----
-    for epoch in range(config["training"]["epochs"]):
-        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss, val_acc     = validate(model, val_loader, criterion, device)
+    # ---- LOOP ----
+    for epoch in range(epochs):
 
-        history["train_loss"].append(train_loss)
-        history["val_loss"].append(val_loss)
-        history["train_acc"].append(train_acc)
-        history["val_acc"].append(val_acc)
+        model.train()
+        epoch_loss = 0
 
-        print(f"[{epoch+1}/{config['training']['epochs']}] "
-              f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.3f} | "
-              f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.3f}")
+        for imgs, labels in train_loader:
+            imgs, labels = imgs.to(device), labels.to(device)
 
-        # save best
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save(model.state_dict(),
-                       os.path.join(config["output"]["model_dir"], "efficientnet_b0_best.pt"))
+            optimizer.zero_grad()
+            outputs = model(imgs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-    # ---- PLOTTING ----
-    if config["output"].get("plot_curves", False):
-        plot_training_curves(history)
+            epoch_loss += loss.item()
 
-    print("Entrenamiento finalizado. Mejor accuracy:", best_val_acc)
+        avg_train_loss = epoch_loss / len(train_loader)
+        train_losses.append(avg_train_loss)
+
+    # ---- EVALUATION ON VAL SET ----
+    model.eval()
+    val_loss_total = 0.0
+    with torch.no_grad():
+        for imgs, labels in val_loader:
+            imgs, labels = imgs.to(device), labels.to(device)
+            outputs = model(imgs)
+            loss = criterion(outputs, labels)
+            val_loss_total += loss.item()
+            preds = outputs.argmax(dim=1).cpu().tolist()
+            val_preds.extend(preds)
+            val_targets.extend(labels.cpu().tolist())
+
+    # store average val loss if there was any validation data
+    if len(val_loader) > 0:
+        avg_val_loss = val_loss_total / len(val_loader)
+        val_losses.append(avg_val_loss)
+        
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
     
+    # ---- SAVE MODEL ----
+    torch.save(model.state_dict(), os.path.join(checkpoint_dir, "efficientnet_b0.pt"))
+
+
+     # ---- PLOTS ----
+    class Results:
+        metrics = type("Metrics", (), {})()
+
+    results = Results()
+    results.metrics.train_loss = train_losses
+    results.metrics.val_loss = val_losses
+
+    plot_loss_curve(results, plots_dir)
+
+    # Only plot confusion matrix / report if we have predictions
+    if len(val_preds) == 0 or len(val_targets) == 0:
+        print("No hay muestras de validación. Se omitirá la matriz de confusión y el reporte de clasificación.")
+    else:
+        plot_confusion(val_targets, val_preds, class_names, plots_dir)
+        save_classification_report(val_targets, val_preds, class_names, plots_dir)
+
+    print("\nEntrenamiento finalizado.")
+    print("Los gráficos están guardados en:", cfg["output"]["plots_dir"])
+
+
 
 if __name__ == "__main__":
     train()
