@@ -6,7 +6,7 @@ from torchvision import transforms
 from timm import create_model
 from utils import load_config, set_seed, ensure_dir, load_image_paths
 from datasets import ImageClassificationDataset
-#from plots import plot_training_curves
+from plots import plot_training_curves
 
 def build_transforms(img_size):
     return transforms.Compose([
