@@ -1,0 +1,8 @@
+              precision    recall  f1-score   support
+
+        Fire       0.96      0.96      0.96       789
+     No Fire       0.96      0.96      0.96       755
+
+    accuracy                           0.96      1544
+   macro avg       0.96      0.96      0.96      1544
+weighted avg       0.96      0.96      0.96      1544

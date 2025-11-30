@@ -23,12 +23,14 @@ def train_model():
         img_size = training_cfg["img_size"]
         patience = training_cfg["patience"]
         model_name = training_cfg["model"]
+        fraction = training_cfg.get("fraction", 1.0)  # Default to 1.0 if not present
     except KeyError as e:
         missing = e.args[0]
         raise KeyError(
             "Falta la clave '{}' en 'config.json'. Asegúrate de incluir 'training' con: "
             "'epochs', 'batch_size', 'img_size', 'model', 'patience'.".format(missing)
         )
+        
 
     # Output folders
     runs_dir = os.path.join(dataset_path, "..", "runs")
@@ -42,7 +44,6 @@ def train_model():
     log(f"Loading YOLOv8 classification model: {model_name} ...")
     model = YOLO(model_name)
 
-    log("Starting training...")
     results = model.train(
         data=dataset_path,
         epochs=epochs,
@@ -52,11 +53,8 @@ def train_model():
         seed=seed,
         project=runs_dir,
         name="cls_model",
-        verbose=True
+        verbose=True,      
     )
-
-    log("Training complete!")
-
     # Save loss plot
     plot_loss_curve(results, metrics_dir)
 
