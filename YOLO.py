@@ -6,6 +6,16 @@ from plots import plot_loss_curve, plot_confusion, save_classification_report
 from sklearn.metrics import confusion_matrix
 import numpy as np
 
+# Augmentación moderada para clasificación
+AUG_PARAMS = {
+    "degrees": 10.0,    # rotación suave (≈ 5–15)
+    "scale": 0.25,      # escala moderada (≈ 0.2–0.3)
+    "hsv_h": 0.015,     # mantener cerca de los defaults
+    "hsv_s": 0.5,
+    "hsv_v": 0.4,
+}
+
+
 
 def train_model():
     # Load config
@@ -53,7 +63,9 @@ def train_model():
         seed=seed,
         project=runs_dir,
         name="cls_model",
-        verbose=True,      
+        verbose=True,
+        fraction=fraction,
+        **AUG_PARAMS,      
     )
     # Save loss plot
     plot_loss_curve(results, metrics_dir)

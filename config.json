@@ -12,11 +12,11 @@
   "seed": 42,
 
   "training": {
-    "epochs": 30,
+    "epochs": 40,
     "batch_size": 32,
     "img_size": 224,
     "model": "yolov8n-cls.pt",
-    "patience": 5
+    "patience": 10
   },
     
     "model_path": "C:/Users/juani/Documents/UM/2025 Segundo Semestre/Tesis/Classification tests/runs/cls_model3/weights/best.pt"
@@ -29,12 +29,12 @@
         "train_dir": "./dataset/train",
         "val_dir": "./dataset/val",
         "test_dir": "./dataset/test",
-        "img_size": 224,
-        "batch_size": 32
+        "img_size": 160,
+        "batch_size": 16
     },
     "efficientnet": {
         "model_name": "efficientnet_b0",
-        "epochs": 30,
+        "epochs": 5,
         "learning_rate": 0.0001,
         "optimizer": "adam",
         "num_classes": 2,
